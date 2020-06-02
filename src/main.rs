@@ -99,10 +99,9 @@ async fn get_playlist_for(spotify: &Spotify, user_id: &str, title: &str) -> Resu
 }
 
 async fn get_spotify_client() -> Result<Spotify> {
-    // TODO change these before we opensource
     let mut oauth = SpotifyOAuth::default()
         .client_id("4abb24ee71384d518e0bb9e3d54b8241")
-        .client_secret("0d5269c16cec49c3b441bfc227fba85c")
+        .client_secret("XXXXXXXXXXXXXXXXXXXXXXXXX") // this has been reset and has to be populated
         .redirect_uri("http://localhost:8888/callback")
         .scope("user-read-private")
         .scope("playlist-modify-public")
