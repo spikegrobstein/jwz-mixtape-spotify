@@ -11,6 +11,7 @@ use std::io::prelude::*;
 
 use regex::Regex;
 use rss::Channel;
+use std::error::Error;
 
 use anyhow::{Result, anyhow};
 
@@ -21,37 +22,80 @@ async fn main() {
     // get the rss feed
     let channel = Channel::from_url("https://www.dnalounge.com/webcast/mixtapes/mixtapes.rss").unwrap();
 
-    let item = channel.items().get(0).unwrap();
-    let title = item.title().unwrap();
-    let text = item.description().unwrap();
+    let me = spotify.me().await.unwrap();
+    let user_id = me.id;
 
-    eprintln!("Title: {}", title);
+    for item in channel.items() {
+        let title = item.title().unwrap();
+        let text = item.description().unwrap();
 
-    eprintln!("parsin: {}", text);
-    let queries  = parse_tracks(&text);
-    eprintln!("queries: {:?}", queries);
+        eprintln!("Title: {}", title);
 
-    for query in queries {
-        eprintln!("  Searching: {}", query);
-        let result = spotify
-            .search_track(&query, 10, 0, Some(Country::UnitedStates))
-            .await;
+        // try to get the playlist
+        // this will create the playlist if it doesn't already exist
+        // then if the playlist is public, we will skip it
+        // otherwise, if it's private, then we have to ensure that tracks are added
+        let playlist = match get_playlist_for(&spotify, &user_id, &title).await {
+            Ok(playlist) => playlist,
+            Err(error) => {
+                eprintln!("Playlist exists and is public, so yeah: {}", error);
+                continue
+            },
+        };
 
-        if let Ok(result) = result {
+        let queries  = parse_tracks(&text);
+        // eprintln!("queries: {:?}", queries);
 
-            let tracks = result.tracks;
-            match tracks.items.get(0) {
-                Some(track) => {
-                    let result_uri = track.id.as_ref().unwrap();
-                    println!("  search result:{:?}", result_uri);
-                },
-                None => {
-                    eprintln!("Found nothin'");
+        let mut track_uris: Vec<String> = vec![];
+
+        for query in queries {
+            eprintln!("  Searching: {}", query);
+            let result = spotify
+                .search_track(&query, 10, 0, Some(Country::UnitedStates))
+                .await;
+
+            if let Ok(result) = result {
+
+                let tracks = result.tracks;
+                match tracks.items.get(0) {
+                    Some(track) => {
+                        let result_uri = track.id.as_ref().unwrap();
+                        println!("  search result:{:?}", result_uri);
+                        track_uris.push(result_uri.to_owned());
+                    },
+                    None => {
+                        eprintln!("Found nothin'");
+                    }
                 }
+            }
+        }
+
+        eprintln!("adding tracks to playlist...");
+        // now let's add tracks to playlist
+        spotify.user_playlist_add_tracks(&user_id, &playlist, &track_uris[..track_uris.len()], None).await.unwrap();
+        // make it public
+        spotify.user_playlist_change_detail(&user_id, &playlist, None, Some(true), None, None).await.unwrap();
+    }
+}
+
+async fn get_playlist_for(spotify: &Spotify, user_id: &str, title: &str) -> Result<String> {
+    let playlists = spotify.current_user_playlists(50, 0).await.unwrap();
+
+    for p in playlists.items {
+        if p.name == title {
+            if Some(true) == p.public {
+                return Err(anyhow!("Playlist is plublic so already created."));
+            } else {
+                return Ok(p.id.to_owned());
             }
         }
     }
 
+    eprintln!("Creating playlist...");
+
+    let playlist = spotify.user_playlist_create(user_id, title, Some(false), None).await.unwrap();
+
+    Ok(playlist.id.to_owned())
 }
 
 async fn get_spotify_client() -> Result<Spotify> {
