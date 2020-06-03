@@ -17,6 +17,34 @@ use anyhow::{Result, anyhow};
 
 const MIXTAPE_RSS_URL: &str = "https://www.dnalounge.com/webcast/mixtapes/mixtapes.rss";
 
+struct PlaylistInfo {
+    title: String,
+    description: String,
+}
+
+impl PlaylistInfo {
+    pub fn new(title: &str, url: Option<&str>, published_at: Option<&str>) -> Self {
+        let description = match (url, published_at) {
+            (None, None) =>
+                "".to_owned(),
+
+            (Some(url), None) =>
+                url.to_owned(),
+
+            (None, Some(published_at)) =>
+                format!("Posted at {}", published_at),
+
+            (Some(url), Some(published_at)) =>
+                format!("{}\n\nPosted at {}", url, published_at),
+        };
+
+        PlaylistInfo {
+            title: title.to_owned(),
+            description,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // configure the spotify client
@@ -27,8 +55,28 @@ async fn main() {
     let me = spotify.me().await.unwrap();
     let user_id = me.id;
 
+    eprintln!("user id: {}", user_id);
+
     for item in channel.items() {
-        let title = item.title().unwrap();
+        // if title isn't in there, print eror and continue iterating
+        let title = match item.title() {
+            Some(title) => title,
+            None => {
+                eprintln!("No title on entry. Skipping.");
+                continue;
+            },
+        };
+
+        let date = item.pub_date();
+        let url = match item.guid() {
+            Some(guid) => Some(guid.value()),
+            None => None,
+        };
+
+
+        let playlist_info = PlaylistInfo::new(title, url, date);
+
+        // this is the text we'll parse for track names
         let text = item.description().unwrap();
 
         eprintln!("Title: {}", title);
@@ -37,7 +85,7 @@ async fn main() {
         // this will create the playlist if it doesn't already exist
         // then if the playlist is public, we will skip it
         // otherwise, if it's private, then we have to ensure that tracks are added
-        let playlist = match get_playlist_for(&spotify, &user_id, &title).await {
+        let playlist = match get_playlist_for(&spotify, &user_id, &playlist_info).await {
             Ok(playlist) => playlist,
             Err(error) => {
                 eprintln!("Playlist exists and is public, so yeah: {}", error);
@@ -80,11 +128,21 @@ async fn main() {
     }
 }
 
-async fn get_playlist_for(spotify: &Spotify, user_id: &str, title: &str) -> Result<String> {
+async fn get_playlist_for(spotify: &Spotify, user_id: &str, playlist_info: &PlaylistInfo) -> Result<String> {
     let playlists = spotify.current_user_playlists(50, 0).await.unwrap();
 
     for p in playlists.items {
-        if p.name == title {
+        if p.name == playlist_info.title {
+            // let's ensure that the description is correct
+            eprintln!("updating existing playlist {}...", &playlist_info.description);
+
+            match spotify.user_playlist_change_detail(user_id, &p.id, Some(&p.name), None, Some(playlist_info.description.clone()), None).await {
+                Err(error) => {
+                    return Err(anyhow!("Failed to update playlist: {:?}", error));
+                },
+                _ => {},
+            }
+
             if Some(true) == p.public {
                 return Err(anyhow!("Playlist is plublic so already created."));
             } else {
@@ -95,7 +153,7 @@ async fn get_playlist_for(spotify: &Spotify, user_id: &str, title: &str) -> Resu
 
     eprintln!("Creating playlist...");
 
-    let playlist = spotify.user_playlist_create(user_id, title, Some(false), None).await.unwrap();
+    let playlist = spotify.user_playlist_create(user_id, &playlist_info.title, Some(false), None).await.unwrap();
 
     Ok(playlist.id.to_owned())
 }
