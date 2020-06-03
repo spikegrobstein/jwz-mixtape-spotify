@@ -163,9 +163,7 @@ async fn get_spotify_client() -> Result<Spotify> {
         .client_id("4abb24ee71384d518e0bb9e3d54b8241")
         .client_secret("XXXXXXXXXXXXXXXXXXXXXXXXX") // this has been reset and has to be populated
         .redirect_uri("http://localhost:8888/callback")
-        .scope("user-read-private")
-        .scope("playlist-modify-public")
-        .scope("playlist-modify-private")
+        .scope("playlist-modify-private playlist-modify-public user-read-private")
         .build();
 
     match get_token(&mut oauth).await {
