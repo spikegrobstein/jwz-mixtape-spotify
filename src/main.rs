@@ -15,12 +15,14 @@ use std::error::Error;
 
 use anyhow::{Result, anyhow};
 
+const MIXTAPE_RSS_URL: &str = "https://www.dnalounge.com/webcast/mixtapes/mixtapes.rss";
+
 #[tokio::main]
 async fn main() {
     // configure the spotify client
     let spotify = get_spotify_client().await.unwrap();
     // get the rss feed
-    let channel = Channel::from_url("https://www.dnalounge.com/webcast/mixtapes/mixtapes.rss").unwrap();
+    let channel = Channel::from_url(MIXTAPE_RSS_URL).unwrap();
 
     let me = spotify.me().await.unwrap();
     let user_id = me.id;
