@@ -155,6 +155,8 @@ async fn get_playlist_for(spotify: &Spotify, user_id: &str, playlist_info: &Play
 
     let playlist = spotify.user_playlist_create(user_id, &playlist_info.title, Some(false), None).await.unwrap();
 
+    eprintln!("Playlist id: {}", playlist.id);
+
     Ok(playlist.id.to_owned())
 }
 
