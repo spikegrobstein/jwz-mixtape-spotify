@@ -34,8 +34,8 @@ impl PlaylistInfo {
             (None, Some(published_at)) =>
                 format!("Posted at {}", published_at),
 
-            (Some(url), Some(published_at)) =>
-                format!("{}\n\nPosted at {}", url, published_at),
+            (Some(url), _) =>
+                format!("{}", url),
         };
 
         PlaylistInfo {
