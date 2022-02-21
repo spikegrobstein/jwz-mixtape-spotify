@@ -4,14 +4,12 @@ use rspotify::client::Spotify;
 use rspotify::oauth2::{SpotifyClientCredentials, SpotifyOAuth};
 use rspotify::senum::Country;
 use rspotify::util::get_token;
-use rspotify::oauth2::TokenInfo;
 
-use std::fs::File;
-use std::io::prelude::*;
 
 use regex::Regex;
 use rss::Channel;
-use std::error::Error;
+
+use htmlescape;
 
 use anyhow::{Result, anyhow};
 
@@ -34,8 +32,8 @@ impl PlaylistInfo {
             (None, Some(published_at)) =>
                 format!("Posted at {}", published_at),
 
-            (Some(url), _) =>
-                format!("{}", url),
+            (Some(url), Some(published_at)) =>
+                format!("{}\nPosted at {}", htmlescape::encode_attribute(url), published_at),
         };
 
         PlaylistInfo {
